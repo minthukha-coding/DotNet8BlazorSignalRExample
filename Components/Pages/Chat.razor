@@ -1,0 +1,80 @@
+﻿@page "/chat"
+@using Microsoft.AspNetCore.SignalR.Client
+@inject NavigationManager Navigation
+@implements IAsyncDisposable
+
+<h3>Chat</h3>
+
+<input @bind="message" @oninput="HandleInput" placeholder="Type your message..." />
+<button @onclick="Send">Send</button>
+
+<ul>
+    @foreach (var msg in messages)
+    {
+        <li>@msg</li>
+    }
+</ul>
+
+@if (typingUsers.Any())
+{
+    <div>
+        @string.Join(", ", typingUsers) is typing...
+    </div>
+}
+
+@code {
+    private HubConnection hubConnection;
+    private List<string> messages = new();
+    private string message = string.Empty;
+    private HashSet<string> typingUsers = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        hubConnection = new HubConnectionBuilder()
+            .WithUrl(Navigation.ToAbsoluteUri("/chatHub"))
+            .Build();
+
+        hubConnection.On<string, string>("ReceiveMessage", (user, message) =>
+        {
+            messages.Add($"{user}: {message}");
+            InvokeAsync(StateHasChanged);
+        });
+
+        hubConnection.On<string>("UserTyping", (user) =>
+        {
+            typingUsers.Add(user);
+            InvokeAsync(StateHasChanged);
+
+            // Clear the typing indicator after a delay
+            Task.Delay(2000).ContinueWith(_ =>
+            {
+                typingUsers.Remove(user);
+                InvokeAsync(StateHasChanged);
+            });
+        });
+
+        await hubConnection.StartAsync();
+    }
+
+    private async Task Send()
+    {
+        if (!string.IsNullOrWhiteSpace(message))
+        {
+            await hubConnection.SendAsync("SendMessage", "User", message);
+            message = string.Empty;
+        }
+    }
+
+    private async Task HandleInput()
+    {
+        await hubConnection.SendAsync("NotifyTyping", "User");
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (hubConnection != null)
+        {
+            await hubConnection.DisposeAsync();
+        }
+    }
+}
