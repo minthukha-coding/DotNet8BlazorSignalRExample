@@ -30,10 +30,12 @@
 
     protected override async Task OnInitializedAsync()
     {
+        //create hub connection
         hubConnection = new HubConnectionBuilder()
             .WithUrl(Navigation.ToAbsoluteUri("/chatHub"))
             .Build();
 
+        //register hub connection events
         hubConnection.On<string, string>("ReceiveMessage", (user, message) =>
         {
             messages.Add($"{user}: {message}");
@@ -65,9 +67,9 @@
         }
     }
 
-    private async Task HandleInput()
+    private async Task HandleInput(string user)
     {
-        await hubConnection.SendAsync("NotifyTyping", "User");
+        await hubConnection.SendAsync("NotifyTyping", "User", user);
     }
 
     public async ValueTask DisposeAsync()
